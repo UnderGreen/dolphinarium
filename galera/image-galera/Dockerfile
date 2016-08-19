@@ -33,6 +33,6 @@ COPY entrypoint.sh /
 
 # Define mountable directories.
 VOLUME ["/var/lib/mysql"]
-EXPOSE 3306 4567 4568
+EXPOSE 3306 4567 4568 4444
 
 ENTRYPOINT ["/entrypoint.sh"]
