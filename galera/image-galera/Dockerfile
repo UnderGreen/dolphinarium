@@ -18,6 +18,8 @@ RUN \
             mysql-wsrep-$MYSQL_VERSION \
             percona-xtrabackup \
             locales \
+            less \
+            net-tools \
             curl \
             --no-install-recommends && \
     locale-gen en_US.UTF-8 && \
