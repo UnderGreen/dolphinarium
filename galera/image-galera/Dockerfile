@@ -5,8 +5,6 @@ ENV DEBIAN_FRONTEND=noninteractive MYSQL_VERSION=5.6
 
 # Installation of Galera Cluster software
 RUN \
-    apt-get -y update && \
-    apt-get install -y software-properties-common --no-install-recommends && \
     echo 'deb http://releases.galeracluster.com/debian jessie main' > /etc/apt/sources.list.d/galera.list && \
     echo "deb http://repo.percona.com/apt jessie main" > /etc/apt/sources.list.d/percona.list && \
     apt-key adv --keyserver keyserver.ubuntu.com --recv BC19DDBA && \
@@ -18,18 +16,20 @@ RUN \
             mysql-wsrep-$MYSQL_VERSION \
             percona-xtrabackup \
             locales \
-            less \
-            net-tools \
             curl \
+            ca-certificates \
             --no-install-recommends && \
-    locale-gen en_US.UTF-8 && \
+    sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/lib/mysql/*
 
 ADD node.cnf /etc/mysql/my.cnf
 
 COPY jq /usr/bin/jq
+COPY clustercheckcron /usr/bin/clustercheckcron
 RUN chmod a+x /usr/bin/jq
+RUN chmod a+x /usr/bin/clustercheckcron
 
 COPY entrypoint.sh /
 
