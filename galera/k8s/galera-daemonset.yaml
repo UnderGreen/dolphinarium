@@ -50,6 +50,11 @@ spec:
                 - monitor
             initialDelaySeconds: 30
             timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "/usr/bin/remove_from_etcd"
       volumes:
         - name: mysql-persistent-storage
           emptyDir: {}
