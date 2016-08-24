@@ -24,12 +24,7 @@ RUN \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/lib/mysql/*
 
-ADD node.cnf /etc/mysql/my.cnf
-
-COPY jq /usr/bin/jq
-COPY clustercheckcron /usr/bin/clustercheckcron
-RUN chmod a+x /usr/bin/jq
-RUN chmod a+x /usr/bin/clustercheckcron
+ADD rootfs/ /
 
 COPY entrypoint.sh /
 
