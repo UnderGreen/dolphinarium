@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+STATUS_OK=0
+STATUS_WARNING=1
+STATUS_CRITICAL=2
+STATUS_UNKNOWN=3
+
+if [[ $1 == '-h' || $1 == '--help' ]];then
+    echo "Usage: $0 <user> <pass> <log_file>"
+    exit
+fi
+
+MYSQL_USERNAME="${1-clustercheckuser}"
+MYSQL_PASSWORD="${2-clustercheckpassword!}"
+ERR_FILE="${3:-/dev/null}"
+
+#Timeout exists for instances where mysqld may be hung
+TIMEOUT=10
+
+EXTRA_ARGS=""
+if [[ -n "$MYSQL_USERNAME" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --user=${MYSQL_USERNAME}"
+fi
+if [[ -n "$MYSQL_PASSWORD" ]]; then
+    EXTRA_ARGS="$EXTRA_ARGS --password=${MYSQL_PASSWORD}"
+fi
+
+MYSQL_CMDLINE="mysql -nNE --connect-timeout=$TIMEOUT ${EXTRA_ARGS}"
+
+WSREP_STATUS=($($MYSQL_CMDLINE -e "SHOW GLOBAL STATUS LIKE 'wsrep_%';"  \
+    2>${ERR_FILE} | grep -A 1 -E 'wsrep_local_state$|wsrep_cluster_status$' \
+    | sed -n -e '2p'  -e '5p' | tr '\n' ' '))
+
+if [[ ${WSREP_STATUS[1]} == 'Primary' && ( ${WSREP_STATUS[0]} -eq 4 || \
+        ${WSREP_STATUS[0]} -eq 2 ) ]]
+then
+    READ_ONLY=$($MYSQL_CMDLINE -e "SHOW GLOBAL VARIABLES LIKE 'read_only';" \
+                    2>${ERR_FILE} | tail -1 2>>${ERR_FILE})
+
+    if [[ "${READ_ONLY}" == "ON" ]]
+    then
+        echo "WARNING. MySQL is in read-only mode"
+        exit $STATUS_WARNING
+    fi
+
+    echo "OK. MySQL node is ready"
+    exit $STATUS_OK
+else
+    echo "CRITICAL. MySQL node is not ready"
+    exit $STATUS_CRITICAL
+fi
