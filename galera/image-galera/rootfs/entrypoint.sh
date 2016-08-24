@@ -129,11 +129,8 @@ else
 
 # Register the current IP in the discovery service
 
-# key set to expire in 30 sec. There is a cronjob that should update them regularly
-
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr" -d ttl=30
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname" -d ttl=30
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr -XPUT -d ttl=30 -d dir=true -d prevExist=true
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr"
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname"
 
     i=($(curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/?quorum=true | jq -r '.node.nodes[]?.key' | awk -F'/' '{print $(NF)}'))
 
@@ -144,9 +141,6 @@ else
     cluster_join=$(join , $i1 $i2 )
 
     echo "Joining cluster $cluster_join"
-
-    /usr/bin/clustercheckcron monitor monitor 1 /var/log/mysql/clustercheck.log 1 & 
-    set -e
 
 fi
 
