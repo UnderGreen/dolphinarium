@@ -9,16 +9,25 @@ source "$PROJECT_DIR/tools/shell-functions.sh"
 
 
 function deploy_registry() {
-	announce-step "Deploying docker registry"
+    announce-step "Deploying docker registry"
 
-	make -C "$PROJECT_DIR/registry/" start
+    make -C "$PROJECT_DIR/registry/" start
 
-	local registry="http://$(k8s-service-endpoint kube-registry 5000 kube-system)"
-	wait-for-http "$registry" 5 30
+    local registry="http://$(k8s-service-endpoint kube-registry 5000 kube-system)"
+    wait-for-http "$registry" 5 30
+}
+
+function build_and_push_galera() {
+    announce-step "Build and push mysql-galera image"
+
+    local registry=$(k8s-service-endpoint kube-registry 5000 kube-system)
+    REGISTRY="$registry" make -C "$PROJECT_DIR/galera/" build
+    REGISTRY="$registry" make -C "$PROJECT_DIR/galera/" push
 }
 
 function main() {
-	deploy_registry
+    deploy_registry
+    build_and_push_galera
 }
 
 main "$@"
