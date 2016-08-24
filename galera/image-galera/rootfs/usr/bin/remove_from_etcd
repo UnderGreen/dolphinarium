@@ -1,0 +1,5 @@
+#!/bin/bash 
+
+ipaddr=$(hostname -i | awk ' { print $1 } ')
+
+curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/?recursive=true -XDELETE

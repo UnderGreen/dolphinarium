@@ -129,11 +129,8 @@ else
 
 # Register the current IP in the discovery service
 
-# key set to expire in 30 sec. There is a cronjob that should update them regularly
-
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr" -d ttl=30
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname" -d ttl=30
-    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr -XPUT -d ttl=30 -d dir=true -d prevExist=true
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr"
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname"
 
     i=($(curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/?quorum=true | jq -r '.node.nodes[]?.key' | awk -F'/' '{print $(NF)}'))
 
@@ -145,12 +142,7 @@ else
 
     echo "Joining cluster $cluster_join"
 
-    /usr/bin/clustercheckcron monitor monitor 1 /var/log/mysql/clustercheck.log 1 & 
-    set -e
-
 fi
 
-mysqld --user=mysql --wsrep_cluster_name=$CLUSTER_NAME --wsrep_cluster_address="gcomm://$cluster_join" --wsrep_sst_method=xtrabackup --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" --wsrep_node_address="$ipaddr:4567" --log-error=/var/log/mysql/error.log $CMDARG
-
-set +e
-curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/?recursive=true -XDELETE
+set -e
+exec mysqld --user=mysql --wsrep_cluster_name=$CLUSTER_NAME --wsrep_cluster_address="gcomm://$cluster_join" --wsrep_sst_method=xtrabackup --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" --wsrep_node_address="$ipaddr:4567" --log-error=/var/log/mysql/error.log $CMDARG
