@@ -12,7 +12,7 @@ if [ -z "$CLUSTER_NAME" ]; then
 fi
 
 	# Get config
-	DATADIR="$("mysqld" --verbose --help 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
+	DATADIR="$("mysqld" --verbose --wsrep_on=OFF --help 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
 
 	if [ ! -e "$DATADIR/init.ok" ]; then
 		if [ -z "$MYSQL_ROOT_PASSWORD" -a -z "$MYSQL_ALLOW_EMPTY_PASSWORD" -a -z "$MYSQL_RANDOM_ROOT_PASSWORD" ]; then
@@ -24,10 +24,10 @@ fi
 		chown -R mysql:mysql "$DATADIR"
 
 		echo 'Running mysql_install_db'
-		mysql_install_db --user=mysql --datadir="$DATADIR" --keep-my-cnf
+		mysql_install_db --user=mysql --wsrep_on=OFF --datadir="$DATADIR" --keep-my-cnf
 		echo 'Finished mysql_install_db'
 
-		mysqld --user=mysql --datadir="$DATADIR" --skip-networking &
+		mysqld --no-defaults --user=mysql --wsrep_on=OFF --datadir="$DATADIR" --skip-networking &
 		pid="$!"
 
 		mysql=( mysql --protocol=socket -uroot )
@@ -53,15 +53,17 @@ fi
 		"${mysql[@]}" <<-EOSQL
 			-- What's done in this file shouldn't be replicated
 			--  or products like mysql-fabric won't work
-			SET @@SESSION.SQL_LOG_BIN=0;
-			DELETE FROM mysql.user ;
-			CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
-			GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
-			CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
-			GRANT RELOAD,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
-			GRANT REPLICATION CLIENT ON *.* TO monitor@'%' IDENTIFIED BY 'monitor';
-			DROP DATABASE IF EXISTS test ;
-			FLUSH PRIVILEGES ;
+                        SET @@SESSION.SQL_LOG_BIN=0;
+                        DELETE FROM mysql.user ;
+                        CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
+                        GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
+                        CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
+                        GRANT RELOAD,PROCESS,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
+			CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
+                        GRANT REPLICATION CLIENT ON *.* TO 'monitor'@'%';
+                        GRANT PROCESS ON *.* TO monitor@localhost IDENTIFIED BY 'monitor';
+                        DROP DATABASE IF EXISTS test ;
+                        FLUSH PRIVILEGES ;
 		EOSQL
 		if [ ! -z "$MYSQL_ROOT_PASSWORD" ]; then
 			mysql+=( -p"${MYSQL_ROOT_PASSWORD}" )
@@ -101,28 +103,54 @@ fi
 	chown -R mysql:mysql "$DATADIR"
 
 if [ -z "$DISCOVERY_SERVICE" ]; then
-	cluster_join=$CLUSTER_JOIN
+    cluster_join=$CLUSTER_JOIN
 else
 
-echo
-echo 'Registering in the discovery service'
-echo
+    echo
+    echo 'Registering in the discovery service'
+    echo
 
-function join { local IFS="$1"; shift; echo "$*"; }
+    function join { local IFS="$1"; shift; echo "$*"; }
 
 # Read the list of registered IP addresses
-set +e
-i=$(curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/ | jq -r '.node.nodes[]?.key' | awk -F'/' '{print $(NF)}')
-cluster_join=$(join , $i)
+    set +e
+
+    ipaddr=$(hostname -i | awk ' { print $1 } ')
+    hostname=$(hostname)
+
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/queue/$CLUSTER_NAME -XPOST -d value=$ipaddr -d ttl=60
+
+#get list of IP from queue 
+    i=($(curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/queue/$CLUSTER_NAME | jq -r '.node.nodes[].value'))
+
+# this to remove my ip from the list
+    i1=${i[@]/$ipaddr}
+    cluster_join1=$(join , $i1)
 
 # Register the current IP in the discovery service
-ipaddr=$(hostname -i | awk ' { print $1 } ')
-hostname=$(hostname)
-curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr"
-curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname"
-set -e
+
+# key set to expire in 30 sec. There is a cronjob that should update them regularly
+
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/ipaddr -XPUT -d value="$ipaddr" -d ttl=30
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr/hostname -XPUT -d value="$hostname" -d ttl=30
+    curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/$ipaddr -XPUT -d ttl=30 -d dir=true -d prevExist=true
+
+    i=($(curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/?quorum=true | jq -r '.node.nodes[]?.key' | awk -F'/' '{print $(NF)}'))
+
+# this removes my ip from the list
+
+    i2=${i[@]/$ipaddr}
+    cluster_join2=$(join , $i1)
+    cluster_join=$(join , $i1 $i2 )
+
+    echo "Joining cluster $cluster_join"
+
+    /usr/bin/clustercheckcron monitor monitor 1 /var/log/mysql/clustercheck.log 1 & 
+    set -e
 
 fi
 
-exec mysqld --user=mysql --wsrep_cluster_name=$CLUSTER_NAME --wsrep_cluster_address="gcomm://$cluster_join" --wsrep_sst_method=xtrabackup-v2 --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" --log-error=${DATADIR}error.log $CMDARG
+mysqld --user=mysql --wsrep_cluster_name=$CLUSTER_NAME --wsrep_cluster_address="gcomm://$cluster_join" --wsrep_sst_method=xtrabackup --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" --wsrep_node_address="$ipaddr:4567" --log-error=/var/log/mysql/error.log $CMDARG
 
+set +e
+curl http://$DISCOVERY_SERVICE/v2/keys/galera-cluster/$CLUSTER_NAME/?recursive=true -XDELETE

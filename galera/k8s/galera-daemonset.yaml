@@ -1,0 +1,41 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  labels:
+    name: galera-cluster
+  name: galera-cluster
+spec:
+  template:
+    metadata:
+      labels:
+        name: galera-cluster
+    spec:
+      nodeSelector:
+        name: galera-cluster
+      containers:
+        - image: localhost:30000/mysql-galera
+          name: galera-cluster
+          ports:
+            - containerPort: 3306
+              name: mysql
+            - containerPort: 4567
+              name: wsrep
+            - containerPort: 4568
+              name: wsrep-ssl
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: "passw0rd"
+            - name: DISCOVERY_SERVICE
+              value: "172.17.4.101:2379"
+            - name: CLUSTER_NAME
+              value: "kubernetes_cluster"
+            - name: XTRABACKUP_PASSWORD
+              value: "passw0rd"
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-persistent-storage
+          emptyDir: {}
+      restartPolicy: Always
+      hostNetwork: true
