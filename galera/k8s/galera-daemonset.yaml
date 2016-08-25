@@ -24,13 +24,19 @@ spec:
               name: wsrep-ssl
           env:
             - name: MYSQL_ROOT_PASSWORD
-              value: "passw0rd"
+              valueFrom:
+                secretKeyRef:
+                  name: galera-secrets
+                  key: mysql-root-password
             - name: DISCOVERY_SERVICE
               value: "172.17.4.101:2379"
             - name: CLUSTER_NAME
               value: "kubernetes_cluster"
             - name: XTRABACKUP_PASSWORD
-              value: "passw0rd"
+              valueFrom:
+                secretKeyRef:
+                  name: galera-secrets
+                  key: xtrabackup-password
           volumeMounts:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
