@@ -48,13 +48,15 @@ spec:
                 - monitor
             initialDelaySeconds: 30
             timeoutSeconds: 5
+            periodSeconds: 30
+            failureThreshold: 5
           livenessProbe:
             exec:
               command:
                 - /usr/bin/statuscheck
                 - monitor
                 - monitor
-            initialDelaySeconds: 30
+            initialDelaySeconds: 300
             timeoutSeconds: 5
           lifecycle:
             preStop:
