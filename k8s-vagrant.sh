@@ -29,7 +29,7 @@ function k8s_cluster_check() {
 
     # Wait pod to appear
     local cmd='kubectl get pods -l run=nginx-test | grep ^nginx-test'
-    wait-for-command "$cmd" 10 30
+    wait-for-command "$cmd" 10 60
 
     # Determine pod to expose
     local pod=$(kubectl get pods -l run=nginx-test --no-headers | awk '{ print $1 }')
@@ -37,7 +37,7 @@ function k8s_cluster_check() {
 	    --type=LoadBalancer
 
     local nginx_endpoint="http://$(k8s-service-endpoint nginx-test 80)"
-    wait-for-http "$nginx_endpoint" 5 30
+    wait-for-http "$nginx_endpoint" 10 30
 
     kubectl delete service nginx-test
     kubectl delete deployment nginx-test
@@ -47,7 +47,7 @@ function k8s_wait_for_workers() {
     announce-step "Waiting for 3 worker nodes"
 
     local cmd="[ $(kubectl get nodes | grep -e '^172\.17\.4\.2' | awk '{ print $1 }' | wc -l) -eq 3 ]"
-    wait-for-command "$cmd" 10 30
+    wait-for-command "$cmd" 10 60
 }
 
 function deploy_registry() {
