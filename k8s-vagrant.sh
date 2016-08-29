@@ -37,7 +37,7 @@ function k8s_cluster_check() {
 	    --type=LoadBalancer
 
     local nginx_endpoint="http://$(k8s-service-endpoint nginx-test 80)"
-    wait-for-http "$nginx_endpoint" 10 30
+    wait-for-http "$nginx_endpoint" 10 60
 
     kubectl delete service nginx-test
     kubectl delete deployment nginx-test
