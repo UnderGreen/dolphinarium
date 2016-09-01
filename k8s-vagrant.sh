@@ -75,6 +75,12 @@ function build_and_push_galera() {
     REGISTRY="$registry" make -C "$PROJECT_DIR/galera/" push
 }
 
+function build_management_utility() {
+	announce-step "Build management utility"
+
+	go build management-galera.go
+}
+
 function main() {
     vagrant_up
     wait_for_k8s
@@ -84,6 +90,7 @@ function main() {
     deploy_registry
     label_worker_nodes
     build_and_push_galera
+	build_management_utility
 }
 
 main "$@"
